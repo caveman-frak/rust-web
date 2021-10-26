@@ -34,13 +34,14 @@ pub struct AuthServer {
 impl Display for AuthServer {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let none = &String::from("-");
+        let redacted = &String::from("[redacted]");
         write!(
             f,
             "Issuer Url: {}\nRealm: {}\nClient ID: {}\nSecret: {}",
             &self.issuer.as_str(),
             &self.realm.as_ref().unwrap_or(none),
             &self.client,
-            &self.secret.as_ref().unwrap_or(none)
+            &self.secret.as_ref().map_or(none, |_| redacted)
         )
     }
 }
@@ -63,15 +64,13 @@ impl Display for AuthConfig {
     }
 }
 
-impl<'a> AuthConfig {
+impl AuthConfig {
     pub fn issuer(&self) -> Result<IssuerUrl> {
         let url = if let Some(realm) = &self.auth_server.realm {
-            rocket::info_!("Adding realm {}", realm);
             self.auth_server
                 .issuer
                 .join(&*format!("realms/{}", realm))?
         } else {
-            rocket::info_!("No realm specified");
             self.auth_server.issuer.clone()
         };
         rocket::info_!(
@@ -82,7 +81,7 @@ impl<'a> AuthConfig {
         Ok(IssuerUrl::from_url(url))
     }
 
-    pub fn redirect(&self, path: &'a str) -> Result<RedirectUrl> {
+    pub fn redirect(&self, path: &str) -> Result<RedirectUrl> {
         Ok(RedirectUrl::from_url(self.base_url.join(path)?))
     }
 

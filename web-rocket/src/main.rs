@@ -1,10 +1,10 @@
 mod auth;
 mod debug;
 
-use {crate::debug::Inputs, rocket::Config};
-
 #[macro_use]
 extern crate rocket;
+
+use rocket::Config;
 
 #[get("/")]
 fn index() -> &'static str {
@@ -25,7 +25,7 @@ fn secure_all() -> &'static str {
 }
 
 #[get("/config")]
-fn read_config(rocket_config: &Config, _debug: Inputs) -> String {
+fn read_config(rocket_config: &Config) -> String {
     format!("{:#?}", rocket_config)
 }
 
