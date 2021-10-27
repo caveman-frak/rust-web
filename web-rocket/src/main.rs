@@ -1,10 +1,11 @@
 mod auth;
 mod debug;
+mod error;
 
 #[macro_use]
 extern crate rocket;
 
-use rocket::Config;
+use {crate::auth::guard::Authorised, rocket::Config};
 
 #[get("/")]
 fn index() -> &'static str {
@@ -13,13 +14,13 @@ fn index() -> &'static str {
 }
 
 #[get("/secure/<amount>")]
-fn secure(amount: u32) -> String {
+fn secure(_authorised: Authorised, amount: u32) -> String {
     rocket::info_!("secure");
     format!("Here is £{}!", amount)
 }
 
 #[get("/secure")]
-fn secure_all() -> &'static str {
+fn secure_all(_authorised: Authorised) -> &'static str {
     rocket::info_!("secure all");
     "Have all the money!"
 }
@@ -31,7 +32,6 @@ fn read_config(rocket_config: &Config) -> String {
 
 #[launch]
 fn rocket() -> _ {
-    // env_logger::init();
     rocket::build()
         .attach(auth::stage())
         .mount("/", routes![index, secure, secure_all, read_config])
