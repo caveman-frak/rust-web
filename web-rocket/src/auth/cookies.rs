@@ -14,6 +14,8 @@ use {
 
 pub(crate) const CODE_STATE_COOKIE: &str = "authorisation-code-state";
 pub(crate) const TOKEN_COOKIE: &str = "authorisation-token";
+pub(crate) const AUTHORISATION_HEADER: &str = "Authorization";
+pub(crate) const BEARER_TOKEN: &str = "Bearer ";
 
 #[allow(dead_code)]
 #[derive(Debug, FromForm)]
@@ -64,7 +66,7 @@ impl StateValue {
 }
 
 impl<'r> From<StateValue> for Cookie<'r> {
-    fn from(state_cookie: StateValue) -> Cookie<'r> {
+    fn from(state_cookie: StateValue) -> Self {
         Cookie::build(
             CODE_STATE_COOKIE,
             serde_json::to_string(&state_cookie).expect("unable to serialise state cookie"),
@@ -80,7 +82,7 @@ impl<'r> From<StateValue> for Cookie<'r> {
 impl TryFrom<&Cookie<'static>> for StateValue {
     type Error = Error;
 
-    fn try_from(cookie: &Cookie<'static>) -> Result<StateValue> {
+    fn try_from(cookie: &Cookie<'static>) -> Result<Self> {
         if cookie.name().eq(CODE_STATE_COOKIE) {
             let state_value: StateValue = serde_json::from_str(cookie.value())?;
             Ok(state_value)
@@ -112,6 +114,14 @@ impl TokenValue {
         }
     }
 
+    fn from_access_token(access: AccessToken) -> Self {
+        Self {
+            access,
+            id: None,
+            refresh: None,
+        }
+    }
+
     pub(crate) fn access(&self) -> &AccessToken {
         &self.access
     }
@@ -126,7 +136,7 @@ impl TokenValue {
 }
 
 impl<'r> From<TokenValue> for Cookie<'r> {
-    fn from(token_cookie: TokenValue) -> Cookie<'r> {
+    fn from(token_cookie: TokenValue) -> Self {
         Cookie::build(
             TOKEN_COOKIE,
             serde_json::to_string(&token_cookie).expect("unable to serialise state cookie"),
@@ -142,12 +152,36 @@ impl<'r> From<TokenValue> for Cookie<'r> {
 impl TryFrom<&Cookie<'static>> for TokenValue {
     type Error = Error;
 
-    fn try_from(cookie: &Cookie<'static>) -> Result<TokenValue> {
+    fn try_from(cookie: &Cookie<'static>) -> Result<Self> {
         if cookie.name().eq(TOKEN_COOKIE) {
             let token_value: TokenValue = serde_json::from_str(cookie.value())?;
             Ok(token_value)
         } else {
             Err(anyhow!("Incorrect cookie name"))
         }
+    }
+}
+
+impl TryFrom<String> for TokenValue {
+    type Error = Error;
+
+    fn try_from(string: String) -> Result<Self> {
+        // strip bearer from beginning if required
+        let mut string = string;
+        if string.starts_with(BEARER_TOKEN) {
+            string = string.trim_start_matches(BEARER_TOKEN).to_owned();
+        }
+
+        let access_token = AccessToken::new(string);
+
+        Ok(TokenValue::from_access_token(access_token))
+    }
+}
+
+impl TryFrom<&str> for TokenValue {
+    type Error = Error;
+
+    fn try_from(string: &str) -> Result<Self> {
+        TokenValue::try_from(string.to_owned())
     }
 }
