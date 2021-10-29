@@ -35,7 +35,7 @@ impl AuthorisationCodeParams {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct StateValue {
     state: String,
     nonce: String,
@@ -92,7 +92,7 @@ impl TryFrom<&Cookie<'static>> for StateValue {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct TokenValue {
     access: AccessToken,
     id: Option<CoreIdToken>,

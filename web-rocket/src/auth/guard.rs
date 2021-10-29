@@ -43,15 +43,22 @@ fn unauthorised<'r>(url: &'r Origin<'_>) -> Outcome<Authorised, Error> {
 
 type Source<'r> = fn(&Request<'_>) -> Result<Option<TokenValue>>;
 
-fn outcome<'r>(mut funcs: Vec<Source>, request: &'r Request<'_>) -> Outcome<Authorised, Error> {
+fn outcome<'r>(mut funcs: Vec<Source>, request: &'r Request<'_>) -> Result<Option<TokenValue>> {
     if let Some(f) = funcs.pop() {
         match (f)(request) {
-            Ok(Some(token)) => Outcome::Success(Authorised { token }),
+            Ok(Some(token)) => Ok(Some(token)),
             Ok(None) => outcome(funcs, request),
-            Err(e) => Outcome::Failure((Status::BadRequest, e)),
+            Err(e) => Err(e),
         }
     } else {
-        unauthorised(request.uri())
+        Ok(None)
+    }
+}
+
+fn cached_outcome<'r>(funcs: Vec<Source>, request: &'r Request<'_>) -> Result<Option<TokenValue>> {
+    match request.local_cache(|| outcome(funcs, request).ok()?) {
+        Some(token) => Ok(Some(token.clone())),
+        None => Ok(None),
     }
 }
 
@@ -62,6 +69,10 @@ impl<'r> FromRequest<'r> for Authorised {
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let header = |r: &Request<'_>| from_header(r.headers());
         let cookie = |r: &Request<'_>| from_cookie(r.cookies());
-        outcome(vec![header, cookie], request)
+        match cached_outcome(vec![header, cookie], request) {
+            Ok(Some(token)) => Outcome::Success(Authorised { token }),
+            Ok(None) => unauthorised(request.uri()),
+            Err(e) => Outcome::Failure((Status::BadRequest, e)),
+        }
     }
 }
