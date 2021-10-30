@@ -1,14 +1,16 @@
 use {
     crate::auth::cookies::StateValue,
-    anyhow::{anyhow, Result},
+    anyhow::{anyhow, Error, Result},
     openidconnect::{
         core::{
             CoreAuthenticationFlow, CoreClient, CoreIdTokenClaims, CoreIdTokenVerifier,
-            CoreProviderMetadata, CoreTokenResponse,
+            CoreProviderMetadata, CoreRevocableToken, CoreTokenIntrospectionResponse,
+            CoreTokenResponse, CoreUserInfoClaims,
         },
         reqwest::async_http_client,
-        AccessTokenHash, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce,
-        OAuth2TokenResponse, PkceCodeChallenge, RedirectUrl, Scope, TokenResponse,
+        AccessToken, AccessTokenHash, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
+        IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, RedirectUrl, Scope,
+        SubjectIdentifier, TokenIntrospectionResponse, TokenResponse,
     },
     rocket::{serde::Deserialize, Config},
     std::{
@@ -174,6 +176,59 @@ impl AuthConnection {
             .id_token_verifier()
             .require_audience_match(true)
             .require_issuer_match(true)
+    }
+
+    pub(crate) async fn get_user_info(
+        &self,
+        access_token: &AccessToken,
+    ) -> Result<(
+        Option<CoreTokenIntrospectionResponse>,
+        Option<CoreUserInfoClaims>,
+    )> {
+        let token_introspect = match self.client.introspect(access_token) {
+            Ok(request) => Some(request.request_async(async_http_client).await?),
+            Err(e) => {
+                rocket::warn_!("{}", e);
+                None
+            }
+        };
+
+        let subject = token_introspect.clone().map_or(None, |t| {
+            t.sub()
+                .map_or(None, |s| Some(SubjectIdentifier::new(s.to_owned())))
+        });
+
+        let user_info_claim = match self.client.user_info(access_token.clone(), subject) {
+            Ok(request) => Some(
+                request
+                    .require_audience_match(true)
+                    .require_issuer_match(true)
+                    .require_signed_response(true)
+                    .request_async(async_http_client)
+                    .await?,
+            ),
+            Err(e) => {
+                rocket::warn_!("{}", e);
+                None
+            }
+        };
+        Ok((token_introspect, user_info_claim))
+    }
+
+    pub(crate) async fn revoke(&self, access_token: AccessToken) -> Result<Option<()>> {
+        match self
+            .client
+            .revoke_token(CoreRevocableToken::AccessToken(access_token))
+        {
+            Ok(request) => match request.request_async(async_http_client).await {
+                Ok(()) => Ok(Some(())),
+                Err(e) => Err(Error::new(e)),
+            },
+            Err(e) => {
+                rocket::warn_!("{}", e);
+                Ok(None)
+            }
+        }
     }
 }
 

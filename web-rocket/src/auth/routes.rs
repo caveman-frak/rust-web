@@ -64,16 +64,16 @@ async fn login_code(
 
 #[get("/logout")]
 async fn logout(
-    _authorised: Authorised,
-    _connection: &State<AuthConnection>,
+    authorised: Authorised,
+    connection: &State<AuthConnection>,
     jar: &CookieJar<'_>,
 ) -> Result<Accepted<()>> {
-    // TODO: logout/revoke the access token
-    // connection
-    //     .client
-    //     .revoke_token(AccessToken(authorised.token().access().clone()))?
-    //     .request_async(async_http_client)
-    //     .await?;
+    if let Some(_) = connection
+        .revoke(authorised.token().access().clone())
+        .await?
+    {
+        rocket::info_!("Access token revocated");
+    }
     jar.remove(Cookie::named(cookies::TOKEN_COOKIE));
     Ok(Accepted(None))
 }
