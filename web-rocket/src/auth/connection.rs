@@ -9,8 +9,8 @@ use {
         },
         reqwest::async_http_client,
         AccessToken, AccessTokenHash, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-        IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, RedirectUrl, Scope,
-        SubjectIdentifier, TokenIntrospectionResponse, TokenResponse,
+        IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl,
+        Scope, SubjectIdentifier, TokenIntrospectionResponse, TokenResponse,
     },
     rocket::{serde::Deserialize, Config},
     std::{
@@ -124,11 +124,10 @@ impl AuthConnection {
         })
     }
 
-    pub(crate) fn authorise_url(
-        &self,
-        pkce_challenge: PkceCodeChallenge,
-    ) -> (Url, CsrfToken, Nonce) {
-        self.scopes
+    pub(crate) fn authorise_url(&self) -> (Url, CsrfToken, Nonce, PkceCodeVerifier) {
+        let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+        let (authorise_url, csrf_state, nonce) = self
+            .scopes
             .iter()
             .fold(
                 self.client.authorize_url(
@@ -139,7 +138,8 @@ impl AuthConnection {
                 |a, s| a.add_scope(s.clone()),
             )
             .set_pkce_challenge(pkce_challenge)
-            .url()
+            .url();
+        (authorise_url, csrf_state, nonce, pkce_verifier)
     }
 
     pub(crate) async fn exchange_code(

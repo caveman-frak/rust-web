@@ -6,7 +6,6 @@ use {
         },
         error::{err, Error, Result},
     },
-    openidconnect::PkceCodeChallenge,
     rocket::{
         http::{Cookie, CookieJar},
         request::Request,
@@ -26,8 +25,7 @@ fn login(authorised: Authorised) -> Result<String> {
 
 #[get("/login", rank = 1)]
 fn login_redirect(connection: &State<AuthConnection>, jar: &CookieJar<'_>) -> Redirect {
-    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
-    let (authorise_url, csrf_state, nonce) = connection.authorise_url(pkce_challenge);
+    let (authorise_url, csrf_state, nonce, pkce_verifier) = connection.authorise_url();
     jar.add(StateValue::new(&csrf_state, &nonce, &pkce_verifier).into());
     Redirect::found(authorise_url.to_string())
 }
