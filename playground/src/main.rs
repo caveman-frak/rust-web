@@ -5,6 +5,8 @@ use {
     url::Url,
 };
 
+mod oidc;
+
 pub fn main() -> Result<()> {
     let url: Url = "http://grey-dragon.local:8080/auth/".try_into()?;
     let realm = url.join("realms/test")?;
